@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "autocharge",
+  "version": "${version}",
+
+  "name": "AutoCharge",
+  "description": "",
+  "authors": [],
+  "contact": {},
+
+  "license": "All-Rights-Reserved",
+
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "fakefun.ru.autocharge.AutoChargeClient"
+    ]
+  },
+
+      "mixins": [
+        "autocharge.mixins.json"
+      ],
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+        "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
