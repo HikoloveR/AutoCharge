@@ -1,0 +1,8 @@
+*.java linguist-language=Java
+*.yml linguist-language=Java
+*.xml linguist-language=Java
+
+target/** linguist-generated=true
+out/** linguist-generated=true
+*.jar linguist-generated=true
+*.class linguist-generated=true
