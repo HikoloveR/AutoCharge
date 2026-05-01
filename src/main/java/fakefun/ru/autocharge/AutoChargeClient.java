@@ -12,12 +12,19 @@ import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
 
 public final class AutoChargeClient implements ClientModInitializer {
+    private enum PreparationResult {
+        READY,
+        SWITCHED,
+        MISSING
+    }
+
     private record ItemUseSource(Hand hand, int slot) {
         private static final int NO_SLOT = -1;
 
@@ -39,6 +46,10 @@ public final class AutoChargeClient implements ClientModInitializer {
     }
 
     private static final int MAX_MOUSE_BUTTONS = 16;
+    private static final int SLOT_SWITCH_DELAY_TICKS = 1;
+    private static final int BETWEEN_USES_DELAY_TICKS = 0;
+    private static final int MAX_USE_RETRIES = 3;
+    private static final int MAX_ACTIONS_PER_TICK = 4;
     private static final boolean[] PREVIOUS_KEYS = new boolean[GLFW.GLFW_KEY_LAST + 1];
     private static final boolean[] PREVIOUS_MOUSE = new boolean[MAX_MOUSE_BUTTONS];
 
@@ -50,6 +61,7 @@ public final class AutoChargeClient implements ClientModInitializer {
     private ItemUseSource pendingChargeUse;
     private int pendingRestoreSlot = -1;
     private int pendingActionDelay = -1;
+    private int pendingUseRetries;
 
     @Override
     public void onInitializeClient() {
@@ -127,6 +139,7 @@ public final class AutoChargeClient implements ClientModInitializer {
             }
         } else if (bindJustPressed(client) && actionCooldownTicks == 0 && !hasPendingActions()) {
             performPearlBoost(client);
+            processPendingActions(client);
         }
 
         updatePreviousInput(client);
@@ -203,60 +216,108 @@ public final class AutoChargeClient implements ClientModInitializer {
             } else {
                 sendClientMessage("No wind charge found in hands or hotbar.");
             }
-            actionCooldownTicks = 10;
+            actionCooldownTicks = 6;
             return;
         }
 
-        int oldSlot = player.getInventory().selectedSlot;
+        int oldSlot = player.getInventory().getSelectedSlot();
         pendingPearlUse = pearlUse;
         pendingChargeUse = chargeUse;
         pendingRestoreSlot = pearlUse.requiresSlotSwitch() || chargeUse.requiresSlotSwitch() ? oldSlot : -1;
         pendingActionDelay = 0;
-        actionCooldownTicks = 8;
+        pendingUseRetries = 0;
+        actionCooldownTicks = 4;
     }
 
-    private void useItemSource(MinecraftClient client, ClientPlayerEntity player, ItemUseSource source) {
-        if (source.requiresSlotSwitch()) {
-            selectHotbarSlot(player, source.slot());
+    private boolean useItemSource(MinecraftClient client, ClientPlayerEntity player, ItemUseSource source) {
+        ActionResult result = client.interactionManager.interactItem(player, source.hand());
+        if (result.isAccepted()) {
+            player.swingHand(source.hand());
+            return true;
         }
-        client.interactionManager.interactItem(player, source.hand());
-        player.swingHand(source.hand());
+        return false;
     }
 
     private void processPendingActions(MinecraftClient client) {
-        if (!hasPendingActions()) {
-            return;
-        }
+        for (int step = 0; step < MAX_ACTIONS_PER_TICK && hasPendingActions(); step++) {
+            if (pendingActionDelay > 0) {
+                pendingActionDelay--;
+                if (pendingActionDelay > 0) {
+                    return;
+                }
+            }
 
-        if (pendingActionDelay > 0) {
-            pendingActionDelay--;
-            return;
-        }
+            ClientPlayerEntity player = client.player;
+            if (player == null || client.interactionManager == null) {
+                resetPendingActions();
+                return;
+            }
 
-        ClientPlayerEntity player = client.player;
-        if (player == null || client.interactionManager == null) {
-            resetPendingActions();
-            return;
-        }
+            if (pendingPearlUse != null) {
+                PreparationResult preparation = prepareItemUse(player, pendingPearlUse, Items.ENDER_PEARL);
+                if (preparation == PreparationResult.MISSING) {
+                    sendClientMessage("Ender pearl moved before use.");
+                    failPendingActions(player);
+                    return;
+                }
+                if (preparation == PreparationResult.SWITCHED) {
+                    pendingActionDelay = SLOT_SWITCH_DELAY_TICKS;
+                    return;
+                }
 
-        if (pendingPearlUse != null) {
-            useItemSource(client, player, pendingPearlUse);
-            pendingPearlUse = null;
-            pendingActionDelay = 1;
-            return;
-        }
+                if (!useItemSource(client, player, pendingPearlUse)) {
+                    if (retryPendingUse()) {
+                        return;
+                    }
+                    failPendingActions(player);
+                    return;
+                }
+                pendingPearlUse = null;
+                pendingUseRetries = 0;
+                pendingActionDelay = BETWEEN_USES_DELAY_TICKS;
+                continue;
+            }
 
-        if (pendingChargeUse != null) {
-            useItemSource(client, player, pendingChargeUse);
-            pendingChargeUse = null;
-            pendingActionDelay = 0;
-            return;
-        }
+            if (pendingChargeUse != null) {
+                PreparationResult preparation = prepareItemUse(player, pendingChargeUse, Items.WIND_CHARGE);
+                if (preparation == PreparationResult.MISSING) {
+                    ItemUseSource refreshedChargeUse = findItemUseSource(player, Items.WIND_CHARGE);
+                    if (refreshedChargeUse == null) {
+                        sendClientMessage("Wind charge moved before use.");
+                        failPendingActions(player);
+                        return;
+                    }
+                    pendingChargeUse = refreshedChargeUse;
+                    preparation = prepareItemUse(player, pendingChargeUse, Items.WIND_CHARGE);
+                    if (preparation == PreparationResult.MISSING) {
+                        sendClientMessage("Wind charge moved before use.");
+                        failPendingActions(player);
+                        return;
+                    }
+                }
+                if (preparation == PreparationResult.SWITCHED) {
+                    pendingActionDelay = SLOT_SWITCH_DELAY_TICKS;
+                    return;
+                }
 
-        if (pendingRestoreSlot != -1) {
-            selectHotbarSlot(player, pendingRestoreSlot);
-            pendingRestoreSlot = -1;
-            pendingActionDelay = -1;
+                if (!useItemSource(client, player, pendingChargeUse)) {
+                    if (retryPendingUse()) {
+                        return;
+                    }
+                    failPendingActions(player);
+                    return;
+                }
+                pendingChargeUse = null;
+                pendingUseRetries = 0;
+                pendingActionDelay = BETWEEN_USES_DELAY_TICKS;
+                continue;
+            }
+
+            if (pendingRestoreSlot != -1) {
+                selectHotbarSlot(player, pendingRestoreSlot);
+                pendingRestoreSlot = -1;
+                pendingActionDelay = -1;
+            }
         }
     }
 
@@ -269,10 +330,42 @@ public final class AutoChargeClient implements ClientModInitializer {
         pendingChargeUse = null;
         pendingRestoreSlot = -1;
         pendingActionDelay = -1;
+        pendingUseRetries = 0;
+    }
+
+    private void failPendingActions(ClientPlayerEntity player) {
+        int restoreSlot = pendingRestoreSlot;
+        resetPendingActions();
+        if (restoreSlot != -1 && player.getInventory().getSelectedSlot() != restoreSlot) {
+            selectHotbarSlot(player, restoreSlot);
+        }
+    }
+
+    private boolean retryPendingUse() {
+        if (pendingUseRetries >= MAX_USE_RETRIES) {
+            return false;
+        }
+
+        pendingUseRetries++;
+        pendingActionDelay = BETWEEN_USES_DELAY_TICKS;
+        return true;
+    }
+
+    private PreparationResult prepareItemUse(ClientPlayerEntity player, ItemUseSource source, Item expectedItem) {
+        if (!sourceContains(player, source, expectedItem)) {
+            return PreparationResult.MISSING;
+        }
+
+        if (!source.requiresSlotSwitch() || player.getInventory().getSelectedSlot() == source.slot()) {
+            return PreparationResult.READY;
+        }
+
+        selectHotbarSlot(player, source.slot());
+        return sourceContains(player, source, expectedItem) ? PreparationResult.SWITCHED : PreparationResult.MISSING;
     }
 
     private void selectHotbarSlot(ClientPlayerEntity player, int slot) {
-        player.getInventory().selectedSlot = slot;
+        player.getInventory().setSelectedSlot(slot);
         player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
     }
 
@@ -285,9 +378,21 @@ public final class AutoChargeClient implements ClientModInitializer {
         return -1;
     }
 
+    private boolean sourceContains(ClientPlayerEntity player, ItemUseSource source, Item item) {
+        if (source.hand() == Hand.OFF_HAND) {
+            return player.getOffHandStack().isOf(item);
+        }
+
+        if (source.requiresSlotSwitch()) {
+            return player.getInventory().getStack(source.slot()).isOf(item);
+        }
+
+        return player.getMainHandStack().isOf(item);
+    }
+
     private ItemUseSource findItemUseSource(ClientPlayerEntity player, Item item) {
         if (player.getMainHandStack().isOf(item)) {
-            return ItemUseSource.mainHand(player.getInventory().selectedSlot);
+            return ItemUseSource.mainHand(player.getInventory().getSelectedSlot());
         }
 
         if (player.getOffHandStack().isOf(item)) {
@@ -343,7 +448,7 @@ public final class AutoChargeClient implements ClientModInitializer {
     private void sendClientMessage(String message) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null) {
-            client.player.sendMessage(Text.literal("[AutoCharge] " + message), false);
+            client.player.sendMessage(Text.literal("[fabric-addon] " + message), false);
         }
     }
 }

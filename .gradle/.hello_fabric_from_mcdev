@@ -1,4 +1,0 @@
-
-
-https://github.com/user/wings
-main,CLASS,fakefun.ru.wings.Wings,net.fabricmc.api.ModInitializer;client,CLASS,fakefun.ru.wings.client.WingsClient,net.fabricmc.api.ClientModInitializer

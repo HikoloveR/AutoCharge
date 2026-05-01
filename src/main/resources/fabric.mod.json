@@ -3,7 +3,7 @@
   "id": "autocharge",
   "version": "${version}",
 
-  "name": "AutoCharge",
+  "name": "fabric-addon",
   "description": "",
   "authors": [],
   "contact": {},
@@ -23,7 +23,7 @@
 
   "depends": {
     "fabricloader": ">=${loader_version}",
-        "fabric": "*",
+    "fabric-api": "*",
     "minecraft": "${minecraft_version}"
   }
 }

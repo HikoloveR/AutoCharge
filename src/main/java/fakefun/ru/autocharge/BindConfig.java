@@ -47,7 +47,7 @@ final class BindConfig {
                 properties.setProperty("code", Integer.toString(state.code()));
             }
             try (var writer = Files.newBufferedWriter(CONFIG_PATH)) {
-                properties.store(writer, "AutoCharge bind config");
+                properties.store(writer, "fabric-addon bind config");
             }
         } catch (IOException ignored) {
         }
