@@ -3,11 +3,16 @@
   "id": "autocharge",
   "version": "${version}",
 
-  "name": "fabric-addon",
+  "name": "AutoCharge",
   "description": "Local nickname manager for quickly switching offline accounts from the Minecraft main menu.",
   "icon": "assets/autocharge/icon.png",
-  "authors": [],
-  "contact": {},
+  "authors": [
+    "HikoloveR"
+  ],
+  "contact": {
+    "homepage": "https://github.com/HikoloveR",
+    "sources": "https://github.com/HikoloveR/AutoCharge"
+  },
 
   "license": "All-Rights-Reserved",
 
