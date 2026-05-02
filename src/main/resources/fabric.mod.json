@@ -4,7 +4,8 @@
   "version": "${version}",
 
   "name": "fabric-addon",
-  "description": "",
+  "description": "Local nickname manager for quickly switching offline accounts from the Minecraft main menu.",
+  "icon": "assets/autocharge/icon.png",
   "authors": [],
   "contact": {},
 
