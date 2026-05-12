@@ -13,6 +13,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
 
@@ -448,7 +449,11 @@ public final class AutoChargeClient implements ClientModInitializer {
     private void sendClientMessage(String message) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player != null) {
-            client.player.sendMessage(Text.literal("[fabric-addon] " + message), false);
+            client.player.sendMessage(Text.literal("[")
+                    .formatted(Formatting.GRAY)
+                    .append(Text.literal("AutoCharge").formatted(Formatting.BLUE))
+                    .append(Text.literal("] ").formatted(Formatting.GRAY))
+                    .append(Text.literal(message).formatted(Formatting.WHITE)), false);
         }
     }
 }

@@ -4,7 +4,7 @@
   "version": "${version}",
 
   "name": "AutoCharge",
-  "description": "Local nickname manager for quickly switching offline accounts from the Minecraft main menu.",
+  "description": "Automatically uses an ender pearl and wind charge with a configured bind.",
   "icon": "assets/autocharge/icon.png",
   "authors": [
     "HikoloveR"
