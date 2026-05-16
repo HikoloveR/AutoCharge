@@ -1,5 +1,6 @@
 .gradle/
 build/
+versions/*/build/
 out/
 
 *.class

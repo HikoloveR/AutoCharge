@@ -221,7 +221,7 @@ public final class AutoChargeClient implements ClientModInitializer {
             return;
         }
 
-        int oldSlot = player.getInventory().getSelectedSlot();
+        int oldSlot = getSelectedSlot(player);
         pendingPearlUse = pearlUse;
         pendingChargeUse = chargeUse;
         pendingRestoreSlot = pearlUse.requiresSlotSwitch() || chargeUse.requiresSlotSwitch() ? oldSlot : -1;
@@ -337,7 +337,7 @@ public final class AutoChargeClient implements ClientModInitializer {
     private void failPendingActions(ClientPlayerEntity player) {
         int restoreSlot = pendingRestoreSlot;
         resetPendingActions();
-        if (restoreSlot != -1 && player.getInventory().getSelectedSlot() != restoreSlot) {
+        if (restoreSlot != -1 && getSelectedSlot(player) != restoreSlot) {
             selectHotbarSlot(player, restoreSlot);
         }
     }
@@ -357,7 +357,7 @@ public final class AutoChargeClient implements ClientModInitializer {
             return PreparationResult.MISSING;
         }
 
-        if (!source.requiresSlotSwitch() || player.getInventory().getSelectedSlot() == source.slot()) {
+        if (!source.requiresSlotSwitch() || getSelectedSlot(player) == source.slot()) {
             return PreparationResult.READY;
         }
 
@@ -366,8 +366,24 @@ public final class AutoChargeClient implements ClientModInitializer {
     }
 
     private void selectHotbarSlot(ClientPlayerEntity player, int slot) {
-        player.getInventory().setSelectedSlot(slot);
+        setSelectedSlot(player, slot);
         player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+    }
+
+    private int getSelectedSlot(ClientPlayerEntity player) {
+        //? if >=1.21.5 {
+        return player.getInventory().getSelectedSlot();
+        //?} else {
+        /*return player.getInventory().selectedSlot;
+        *///?}
+    }
+
+    private void setSelectedSlot(ClientPlayerEntity player, int slot) {
+        //? if >=1.21.5 {
+        player.getInventory().setSelectedSlot(slot);
+        //?} else {
+        /*player.getInventory().selectedSlot = slot;
+        *///?}
     }
 
     private int findHotbarSlot(ClientPlayerEntity player, Item item) {
@@ -393,7 +409,7 @@ public final class AutoChargeClient implements ClientModInitializer {
 
     private ItemUseSource findItemUseSource(ClientPlayerEntity player, Item item) {
         if (player.getMainHandStack().isOf(item)) {
-            return ItemUseSource.mainHand(player.getInventory().getSelectedSlot());
+            return ItemUseSource.mainHand(getSelectedSlot(player));
         }
 
         if (player.getOffHandStack().isOf(item)) {
